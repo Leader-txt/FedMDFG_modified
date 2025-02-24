@@ -5,6 +5,7 @@ import math
 import numpy as np
 import torch
 from fedplat.algorithm.common.utils import get_fedmdfg_d
+from .FedMDFGM import get_fedmdfgm_d
 
 """
 Code of FedMDFG.
@@ -61,6 +62,8 @@ class FedMDFG(fp.Algorithm):
         for i, p in enumerate(model.parameters()):
             p.grad = d[self.model.Loc_reshape_list[i]]
         self.optimizer.step()
+        total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        assert d.shape[0] == total_params
         return model
 
     def line_search(self, g_locals, d, fair_guidance_vec, fair_grad, base_lr, l_locals_0, live_idx, scale):#线性搜索
@@ -122,6 +125,7 @@ class FedMDFG(fp.Algorithm):
         self.send_sync_model()  # Here we reuse the framework to copy the model to all clients. In fact, we only need to send the global model to those new-come clients.
         self.send_cal_all_batches_gradient_loss_order()
         g_locals, l_locals = self.send_require_all_batches_gradient_loss_result()# 获取梯度与损失，g_locals客户端梯度，l_locals客户端损失
+        # print(g_locals)
         client_id_list = self.send_require_attr('id')
         force_active = False
         increase_count = 0
@@ -175,7 +179,8 @@ class FedMDFG(fp.Algorithm):
         #     vec = l_locals
         # 下面这个函数应该就是计算q的部分了，但是没有完全理解
         # calculate d
-        d, vec, p_active_flag, fair_grad = get_fedmdfg_d(g_locals, l_locals, add_grads, self.theta, fair_guidance_vec, force_active, self.device)
+        # d, vec, p_active_flag, fair_grad = get_fedmdfg_d(g_locals, l_locals, add_grads, self.theta, fair_guidance_vec, force_active, self.device)
+        d, vec, p_active_flag, fair_grad = get_fedmdfgm_d(g_locals, l_locals, add_grads, self.theta, fair_guidance_vec, force_active, self.device)
         if p_active_flag == 1:
             self.prefer_active = 1
         # Update parameters of the model
