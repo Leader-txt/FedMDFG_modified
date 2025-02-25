@@ -1,6 +1,6 @@
 import os
 from fedplat.Algorithm import Algorithm
-from fedplat.Client import Client
+from fedplat.Client_stable import Client
 from fedplat.DataLoader import DataLoader
 from fedplat.Model import Model
 from fedplat.Metric import Metric
