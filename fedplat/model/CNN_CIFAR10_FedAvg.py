@@ -28,7 +28,20 @@ class CNN_CIFAR10_FedAvg(fp.Model):
             nn.Linear(192, target_class_num),
         )
         self.create_Loc_reshape_list()
+        self.out_layers = {}
+        self.record = False
     def forward(self, x):
-        x = self.encoder(x)
+        if self.record:
+            for i in range(len(self.encoder)):
+                x = self.encoder[i](x)
+                self.out_layers[i] = x.detach().cpu()
+        else:
+            x = self.encoder(x)
         x = x.flatten(1)
-        return self.decoder(x)
+        if self.record:
+            for i in range(len(self.decoder)):
+                x = self.decoder[i](x)
+                self.out_layers[i+len(self.encoder)] = x.detach().cpu()
+        else:
+            x = self.decoder(x)
+        return x

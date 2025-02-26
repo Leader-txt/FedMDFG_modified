@@ -261,6 +261,43 @@ class Client:
             self.optimizer.step()
             return model
 
+    def get_gradient_statistics(self):
+        """
+        计算模型梯度的最小值、最大值和平均值。
+
+        参数:
+            model (nn.Module): PyTorch 模型。
+            loss (torch.Tensor): 损失值，用于反向传播。
+
+        返回:
+            dict: 包含梯度最小值、最大值和平均值的字典。
+        """
+        model = self.model
+        # 初始化梯度统计
+        grad_min = float('inf')
+        grad_max = float('-inf')
+        grad_sum = 0.0
+        grad_count = 0
+
+        # 遍历模型参数并计算梯度统计
+        for param in model.parameters():
+            if param.grad is not None:
+                grad_min = min(grad_min, param.grad.min().item())
+                grad_max = max(grad_max, param.grad.max().item())
+                grad_sum += param.grad.sum().item()
+                grad_count += param.grad.numel()
+
+        # 计算梯度平均值
+        grad_avg = grad_sum / grad_count if grad_count > 0 else 0.0
+        # 返回结果
+        res =  {
+            "grad_min": grad_min,
+            "grad_max": grad_max,
+            "grad_avg": grad_avg
+        }
+
+        print(res)
+
     def cal_all_batches_gradient_loss(self):
         self.model.train()
         grad_mat = []
@@ -273,11 +310,29 @@ class Client:
                 continue
             weights.append(batch_y.shape[0])
             out = self.model(batch_x)
-            loss = self.stable_loss(out, batch_y)
+            # layer_outputs = {}
+            # # 手动逐层前向传播
+            # out = batch_x
+            # for name, layer in self.model.named_children():
+            #     out = layer(out)
+            #     layer_outputs[name] = out
+            loss = self.stable_loss(out, batch_y) 
+            # if torch.isnan(out).any():
+            #     print(f"NaN detected in output")
+            # if torch.isinf(out).any():
+            #     print(f"Inf detected in output")
             if self.check_nan(loss, f"loss in batch {step}"):
-                self.monitor_gradients()
-                print(out)
-                print(batch_x)
+                self.model.record = True
+                if len(self.model.out_layers):
+                    print(self.model.out_layers[0])
+                # self.get_gradient_statistics()
+                # print(layer_outputs)
+                # print(batch_x.sum())
+                # print(batch_x.min(),batch_x.max())
+                # self.monitor_gradients()
+                # print(out)
+                # print(batch_x)
+                # print(batch_y)
                 continue
             total_loss += loss * batch_y.shape[0]
             self.model.zero_grad()
