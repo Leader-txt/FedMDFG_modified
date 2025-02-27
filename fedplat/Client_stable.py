@@ -42,6 +42,10 @@ class Client:
         self.model_weights = None  
         self.model_loss = None  
         self.info_msg = {}  
+        self.update_speed = self.id
+        self.predefined_weight = 1
+        self.quantization_level = 65536
+        self.compression_ratio = 1.0
         self.initial_lr = float(train_setting['optimizer'].defaults['lr'])
         self.lr = self.initial_lr
         self.optimizer = train_setting['optimizer'].__class__(filter(lambda p: p.requires_grad, self.model.parameters()), lr=self.lr)
@@ -67,6 +71,57 @@ class Client:
         self.local_test_number = local_test_number
         self.training_batch_num = len(local_training_data)
         self.test_batch_num = len(local_test_data)
+        self.data_volume = len(self.local_training_data)
+
+    # def compress_gradients(self, gradients):
+    #     # Flatten the gradients
+    #     flat_grad = gradients.view(-1)
+        
+    #     # Apply Top-k sparsification
+    #     k = int(self.compression_ratio * len(flat_grad))
+    #     _, top_k_indices = torch.topk(flat_grad.abs(), k)
+        
+    #     # Create a mask for top-k values
+    #     mask = torch.zeros_like(flat_grad)
+    #     mask[top_k_indices] = 1
+        
+    #     # Apply the mask to the gradients
+    #     sparse_grad = flat_grad * mask
+        
+    #     # Quantize the non-zero values
+    #     max_val = sparse_grad.abs().max()
+    #     quantized_grad = torch.round(sparse_grad / max_val * (self.quantization_level - 1))
+    #     quantized_grad = quantized_grad * max_val / (self.quantization_level - 1)
+        
+    #     return quantized_grad, mask
+    def batch_compress(self, return_grad):
+        # 将梯度列表转换为二维张量 [batch_size, features]
+        stacked_grad = torch.stack([g.view(-1) for g in return_grad])  # [B, N]
+        
+        # 批量计算Top-k索引
+        k = int(self.compression_ratio * stacked_grad.size(1))
+        _, topk_indices = torch.topk(stacked_grad.abs(), k, dim=1)     # [B, k]
+        
+        # 批量生成掩码
+        batch_indices = torch.arange(stacked_grad.size(0), device=stacked_grad.device)[:, None]
+        mask = torch.zeros_like(stacked_grad)
+        mask[batch_indices, topk_indices] = 1  # 向量化散射操作
+        
+        # 批量稀疏化
+        sparse_grad = stacked_grad * mask
+        
+        # 批量量化
+        max_vals = sparse_grad.abs().max(dim=1, keepdim=True).values  # [B, 1]
+        max_vals = max_vals.clamp_min(1e-8)  # 防止除零
+        
+        quantized = (sparse_grad / max_vals * (self.quantization_level - 1))
+        quantized = quantized.round_().mul_(max_vals / (self.quantization_level - 1))
+        
+        # 恢复原始形状
+        compressed_g_locals = [q.view_as(g) for q, g in zip(quantized, return_grad)]
+        masks = [m.view_as(g) for m, g in zip(mask, return_grad)]
+        
+        return compressed_g_locals, masks
 
     def get_message(self, msg):
         return_msg = {}
@@ -124,7 +179,15 @@ class Client:
                     old_model_params_span = self.old_model.span_model_params_to_vec()
                     grad = old_model_params_span - weights
                     return_grad = grad / torch.norm(grad) * torch.norm(return_grad)
-            return_msg['g_local'] = return_grad
+            # compressed_g_locals = []
+            # masks = []
+            # for g in return_grad:
+            #     compressed_g, mask = self.compress_gradients(g)
+            #     compressed_g_locals.append(compressed_g)
+            #     masks.append(mask)
+            print(return_grad)
+            compressed_g_locals,masks = self.batch_compress(return_grad)
+            return_msg['g_local'] = [compressed_g_locals,masks]
             return_msg['l_local'] = return_loss
         if msg['command'] == 'require_evaluate_result':
             return_grad = self.model.span_model_grad_to_vec()
@@ -280,7 +343,7 @@ class Client:
         grad_count = 0
 
         # 遍历模型参数并计算梯度统计
-        for param in model.parameters():
+        for param in model.encoder.parameters():
             if param.grad is not None:
                 grad_min = min(grad_min, param.grad.min().item())
                 grad_max = max(grad_max, param.grad.max().item())
@@ -322,9 +385,9 @@ class Client:
             # if torch.isinf(out).any():
             #     print(f"Inf detected in output")
             if self.check_nan(loss, f"loss in batch {step}"):
-                self.model.record = True
-                if len(self.model.out_layers):
-                    print(self.model.out_layers[0])
+                # self.model.record = True
+                # if len(self.model.out_layers):
+                #     print(self.model.out_layers[0])
                 # self.get_gradient_statistics()
                 # print(layer_outputs)
                 # print(batch_x.sum())

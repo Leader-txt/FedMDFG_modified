@@ -12,7 +12,7 @@ Code of FedMDFG.
 
 """
 
-class FedMDFG(fp.Algorithm):
+class ImprovedFedMDFG(fp.Algorithm):
     def __init__(self,
                  name='FedMDFG',
                  data_loader=None,
@@ -56,6 +56,53 @@ class FedMDFG(fp.Algorithm):
         self.client_join_count = [0] * self.data_loader.pool_size
         self.same_user_flag = True
         self.prefer_active = 0
+        self.client_sizes = None
+        self.client_weights = None
+        self.alpha = 0.9
+    def calculate_client_sizes(self):
+        # Calculate client sizes based on data volume, update speed, and predefined weights
+        data_volumes = self.send_require_attr('data_volume')
+        update_speeds = self.send_require_attr('update_speed')
+        predefined_weights = self.send_require_attr('predefined_weight')
+
+        # Normalize each factor
+        data_volumes = np.array(data_volumes) / np.max(data_volumes)
+        update_speeds = np.array(update_speeds) / np.max(update_speeds)
+        predefined_weights = np.array(predefined_weights) / np.sum(predefined_weights)
+
+        # Combine factors to determine client sizes
+        self.client_sizes = (data_volumes + update_speeds + predefined_weights) / 3
+
+    def update_client_weights(self, l_locals):
+        if self.client_weights is None:
+            self.client_weights = self.client_sizes / np.sum(self.client_sizes)
+
+        # Calculate the inverse of losses to give higher weight to clients with lower loss
+        inverse_losses = 1 / (l_locals.cpu().numpy() + 1e-8)  # Adding small epsilon to avoid division by zero
+
+        # Normalize the inverse losses
+        normalized_inverse_losses = inverse_losses / np.sum(inverse_losses)
+
+        # Update weights using a combination of predefined weights and dynamic adjustment
+        updated_weights = self.alpha * self.client_weights + (1 - self.alpha) * normalized_inverse_losses
+        
+        # Normalize the updated weights
+        self.client_weights = updated_weights / np.sum(updated_weights)
+
+    def calculate_fair_guidance_vec(self, l_locals):
+        self.update_client_weights(l_locals)
+        
+        # Calculate relative fairness
+        mean_loss = torch.mean(l_locals)
+        relative_fairness = (l_locals - mean_loss) / mean_loss
+
+        # Combine relative fairness with client weights
+        fair_guidance_vec = torch.tensor(self.client_weights).to(self.device) * (1 + relative_fairness)
+
+        # Normalize the fair guidance vector
+        fair_guidance_vec = fair_guidance_vec / torch.sum(fair_guidance_vec)
+
+        return fair_guidance_vec.float()
 
     def update_model(self, model, d, lr):
         self.optimizer = self.train_setting['optimizer'].__class__(filter(lambda p: p.requires_grad, model.parameters()), lr=lr)
@@ -123,6 +170,8 @@ class FedMDFG(fp.Algorithm):
         self.model.train() # 本地训练
         self.prefer_active = 0
         self.send_sync_model()  # Here we reuse the framework to copy the model to all clients. In fact, we only need to send the global model to those new-come clients.
+        if self.client_sizes is None:
+            self.calculate_client_sizes()
         self.send_cal_all_batches_gradient_loss_order()
         g_locals, l_locals = self.send_require_all_batches_gradient_loss_result()# 获取梯度与损失，g_locals客户端梯度，l_locals客户端损失
         # print(g_locals)
@@ -172,16 +221,17 @@ class FedMDFG(fp.Algorithm):
         # 第一次改进
         # fair_guidance_vec = l_locals[live_idx]/torch.mean(l_locals[live_idx])
         # 第二次改进
-        fair_guidance_vec = (l_locals[live_idx]-l_locals[live_idx].min())/(l_locals[live_idx].max() - l_locals[live_idx].min())
+        # fair_guidance_vec = (l_locals[live_idx]-l_locals[live_idx].min())/(l_locals[live_idx].max() - l_locals[live_idx].min())
         # 下面这个算法也是曾经的改进方案，最后*100可以改成其他的倍率
         # fair_guidance_vec = 1 + (fair_guidance_vec - 1)*100
         # for i in range(len(live_idx)):
         #     vec = l_locals
+        fair_guidance_vec = self.calculate_fair_guidance_vec(l_locals[live_idx])
         # 下面这个函数应该就是计算q的部分了，但是没有完全理解
         # calculate d
         # d, vec, p_active_flag, fair_grad = get_fedmdfg_d(g_locals, l_locals, add_grads, self.theta, fair_guidance_vec, force_active, self.device)
-        d, vec, p_active_flag, fair_grad = get_fedmdfgm_d(g_locals, l_locals, add_grads, self.theta, fair_guidance_vec, force_active, self.device)
-        print("d:",d,"vec:",vec,"p_active_flag",p_active_flag,"fair_grad",fair_grad)
+        d, vec, p_active_flag, fair_grad = get_fedmdfg_d(g_locals, l_locals, add_grads, self.theta, fair_guidance_vec, force_active, self.device)
+        # print("d:",d,"vec:",vec,"p_active_flag",p_active_flag,"fair_grad",fair_grad)
         if p_active_flag == 1:
             self.prefer_active = 1
         # Update parameters of the model

@@ -56,7 +56,7 @@ def get_fedmdfgm_d(
   value_norm = value_sparse / torch.norm(value_sparse)
   cos = torch.clamp(value_norm @ fair_guidance_vec_sparse, -1, 1)
   bias = torch.acos(cos) * 180 / np.pi
-  pref_active = (bias > alpha) or force_active
+  pref_active = (bias > alpha) | force_active
 
   if pref_active:
     h_vec = (fair_guidance_vec_sparse @ value_norm * value_norm - fair_guidance_vec_sparse)

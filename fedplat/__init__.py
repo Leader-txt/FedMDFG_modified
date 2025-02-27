@@ -20,6 +20,7 @@ from fedplat.algorithm.FedFV.FedFV import FedFV
 from fedplat.algorithm.Ditto.Ditto import Ditto
 from fedplat.algorithm.TERM.TERM import TERM
 from fedplat.algorithm.FedMDFG.FedMDFG import FedMDFG
+from fedplat.algorithm.FedMDFG.FedMDFGIP import ImprovedFedMDFG
 from fedplat.dataloaders.DataLoader_cifar10 import DataLoader_cifar10
 from fedplat.dataloaders.DataLoader_cifar10_unbalanced import DataLoader_cifar10_unbalanced
 from fedplat.dataloaders.DataLoader_mnist import DataLoader_mnist
