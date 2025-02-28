@@ -42,7 +42,7 @@ class Client:
         self.model_weights = None  
         self.model_loss = None  
         self.info_msg = {}  
-        self.update_speed = self.id
+        self.update_speed = self.id/100 + 1
         self.predefined_weight = 1
         self.quantization_level = 65536
         self.compression_ratio = 1.0
@@ -185,9 +185,11 @@ class Client:
             #     compressed_g, mask = self.compress_gradients(g)
             #     compressed_g_locals.append(compressed_g)
             #     masks.append(mask)
-            print(return_grad)
-            compressed_g_locals,masks = self.batch_compress(return_grad)
-            return_msg['g_local'] = [compressed_g_locals,masks]
+            # print(return_grad)
+
+            # compressed_g_locals,masks = self.batch_compress(return_grad)
+            # return_msg['g_local'] = [compressed_g_locals,masks]
+            return_msg['g_local'] = return_grad
             return_msg['l_local'] = return_loss
         if msg['command'] == 'require_evaluate_result':
             return_grad = self.model.span_model_grad_to_vec()

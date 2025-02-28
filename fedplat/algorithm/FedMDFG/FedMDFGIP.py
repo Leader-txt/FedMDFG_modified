@@ -14,7 +14,7 @@ Code of FedMDFG.
 
 class ImprovedFedMDFG(fp.Algorithm):
     def __init__(self,
-                 name='FedMDFG',
+                 name='ImprovedFedMDFG',
                  data_loader=None,
                  model=None,
                  device=None,

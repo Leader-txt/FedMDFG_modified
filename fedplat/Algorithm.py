@@ -100,6 +100,7 @@ class Algorithm:
         self.lr = self.initial_lr * self.train_setting['lr_decay']**self.current_comm_round
         self.optimizer = self.update_learning_rate(self.optimizer, self.lr)  
         self.send_update_learning_rate_order()
+        print("lr:",self.lr)
     def terminated(self, update_count=False):
         self.adjust_learning_rate()
         self.send_sync_model(update_count)
@@ -207,16 +208,15 @@ class Algorithm:
         for idx, client in enumerate(self.client_list):
             msg = {'command': 'require_all_batches_gradient_loss_result'}
             msg = client.get_message(msg)
-            compressed_g, masks = msg['g_local']
-            print(idx)
-            g_local = self.decompress_batch(client,compressed_g, masks)
-            print(idx)
-            # g_local = torch.stack(g_local)
+            g_local = msg['g_local']
+            # compressed_g, masks = msg['g_local']
+            # print(idx)
+            # g_local = self.decompress_batch(client,compressed_g, masks)
+            # print(idx)
             g_locals.append(g_local)
-            print(g_local)
+            # print(g_local)
             l_locals.append(msg['l_local'])
         g_locals = torch.stack([g_locals[i] for i in range(len(g_locals))])
-        # print(g_locals)
         l_locals = torch.stack(l_locals)
         return g_locals, l_locals
     def send_require_evaluate_result(self):

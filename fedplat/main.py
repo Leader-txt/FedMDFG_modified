@@ -69,7 +69,7 @@ def initialize(params):
                           model=model,
                           device=device,
                           train_setting=train_setting,
-                          client_num=params['N'],#int(data_loader.pool_size * params['C']),  
+                          client_num=int(data_loader.pool_size * params['C']),  
                           metric_list=[fp.Correct()],  
                           max_comm_round=params['R'],  
                           max_training_num=None,  
