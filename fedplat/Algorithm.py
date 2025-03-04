@@ -105,7 +105,7 @@ class Algorithm:
         self.adjust_learning_rate()
         self.send_sync_model(update_count)
         self.comm_log['training_num'].append(self.current_training_num)
-        self.test(self.result_model)
+        # self.test(self.result_model)
         if callable(self.outFunc):
             self.outFunc(self)
         if self.current_comm_round >= self.max_comm_round or self.current_training_num >= self.max_training_num:
@@ -202,6 +202,16 @@ class Algorithm:
         decompressed = compressed_tensor * scale_factor * mask_tensor
         
         return decompressed  # 保持批量维度
+    def dequantize(self,quantized_data):
+        quantized_grad = quantized_data['quantized']
+        min_val = quantized_data['min']
+        max_val = quantized_data['max']
+        min_val = min_val.to(self.device)
+        max_val = max_val.to(self.device)
+        scale = (max_val - min_val) / 255.0
+        dequantized_grad = quantized_grad.float() * scale + min_val
+        return dequantized_grad
+    
     def send_require_all_batches_gradient_loss_result(self):
         g_locals = []  
         l_locals = []  
@@ -209,6 +219,7 @@ class Algorithm:
             msg = {'command': 'require_all_batches_gradient_loss_result'}
             msg = client.get_message(msg)
             g_local = msg['g_local']
+            g_local = self.dequantize(g_local)
             # compressed_g, masks = msg['g_local']
             # print(idx)
             # g_local = self.decompress_batch(client,compressed_g, masks)

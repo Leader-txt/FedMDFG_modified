@@ -54,7 +54,7 @@ class Client:
         self.old_model = copy.deepcopy(self.model)
         self.scheduler = ReduceLROnPlateau(self.optimizer, mode='min', factor=0.1, patience=10)
         self.init_weights()
-
+        
     def init_weights(self):
         def init_func(m):
             if isinstance(m, torch.nn.Linear) or isinstance(m, torch.nn.Conv2d):
@@ -73,27 +73,6 @@ class Client:
         self.test_batch_num = len(local_test_data)
         self.data_volume = len(self.local_training_data)
 
-    # def compress_gradients(self, gradients):
-    #     # Flatten the gradients
-    #     flat_grad = gradients.view(-1)
-        
-    #     # Apply Top-k sparsification
-    #     k = int(self.compression_ratio * len(flat_grad))
-    #     _, top_k_indices = torch.topk(flat_grad.abs(), k)
-        
-    #     # Create a mask for top-k values
-    #     mask = torch.zeros_like(flat_grad)
-    #     mask[top_k_indices] = 1
-        
-    #     # Apply the mask to the gradients
-    #     sparse_grad = flat_grad * mask
-        
-    #     # Quantize the non-zero values
-    #     max_val = sparse_grad.abs().max()
-    #     quantized_grad = torch.round(sparse_grad / max_val * (self.quantization_level - 1))
-    #     quantized_grad = quantized_grad * max_val / (self.quantization_level - 1)
-        
-    #     return quantized_grad, mask
     def batch_compress(self, return_grad):
         # 将梯度列表转换为二维张量 [batch_size, features]
         stacked_grad = torch.stack([g.view(-1) for g in return_grad])  # [B, N]
@@ -122,7 +101,18 @@ class Client:
         masks = [m.view_as(g) for m, g in zip(mask, return_grad)]
         
         return compressed_g_locals, masks
-
+    def simulate_compression(self, param):
+        original_grad = param
+        min_val = original_grad.min()
+        max_val = original_grad.max()
+        scale = (max_val - min_val) / 255.0
+        quantized_grad = ((original_grad - min_val) / scale).round().clamp(0, 255).byte()
+        return {
+            'quantized': quantized_grad,
+            'min': min_val,
+            'max': max_val
+        }
+    
     def get_message(self, msg):
         return_msg = {}
         if msg['command'] == 'sync':
@@ -189,7 +179,8 @@ class Client:
 
             # compressed_g_locals,masks = self.batch_compress(return_grad)
             # return_msg['g_local'] = [compressed_g_locals,masks]
-            return_msg['g_local'] = return_grad
+            compressed_gradients = self.simulate_compression(return_grad)
+            return_msg['g_local'] = compressed_gradients
             return_msg['l_local'] = return_loss
         if msg['command'] == 'require_evaluate_result':
             return_grad = self.model.span_model_grad_to_vec()
