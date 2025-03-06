@@ -105,7 +105,7 @@ class Algorithm:
         self.adjust_learning_rate()
         self.send_sync_model(update_count)
         self.comm_log['training_num'].append(self.current_training_num)
-        # self.test(self.result_model)
+        self.test(self.result_model)
         if callable(self.outFunc):
             self.outFunc(self)
         if self.current_comm_round >= self.max_comm_round or self.current_training_num >= self.max_training_num:
@@ -172,36 +172,6 @@ class Algorithm:
             l_locals.append(msg['l_local'])
         l_locals = torch.stack(l_locals)
         return l_locals
-    
-    # def decompress_gradients(self,client, compressed_grad, mask):
-    #     # Dequantize the gradients
-    #     max_val = compressed_grad.abs().max()
-    #     dequantized_grad = compressed_grad * (client.quantization_level - 1) / max_val
-    #     dequantized_grad = dequantized_grad * max_val / (client.quantization_level - 1)
-        
-    #     # Apply the mask to recover the original shape
-    #     decompressed_grad = dequantized_grad * mask
-        
-    #     return decompressed_grad
-    def decompress_batch(self, client, compressed_g, masks):
-    # 将输入列表转换为批量张量
-        compressed_tensor = torch.stack(compressed_g)  # [batch, ...]
-        mask_tensor = torch.stack(masks)               # [batch, ...]
-        
-        # 向量化计算每个压缩梯度的max_val
-        # 保持原始维度结构：max_val.shape == [batch]
-        max_vals = compressed_tensor.abs().flatten(start_dim=0).max(dim=0).values
-        
-        # 自动广播缩放因子
-        scale_factor = max_vals / (client.quantization_level - 1)
-        # 添加必要的维度用于广播 [batch, 1, 1,...]
-        scale_shape = [-1] + [1]*(compressed_tensor.dim()-1)
-        scale_factor = scale_factor.view(*scale_shape)
-        
-        # 单次矩阵运算完成全部解压
-        decompressed = compressed_tensor * scale_factor * mask_tensor
-        
-        return decompressed  # 保持批量维度
     def dequantize(self,quantized_data):
         quantized_grad = quantized_data['quantized']
         min_val = quantized_data['min']
@@ -219,13 +189,8 @@ class Algorithm:
             msg = {'command': 'require_all_batches_gradient_loss_result'}
             msg = client.get_message(msg)
             g_local = msg['g_local']
-            g_local = self.dequantize(g_local)
-            # compressed_g, masks = msg['g_local']
-            # print(idx)
-            # g_local = self.decompress_batch(client,compressed_g, masks)
-            # print(idx)
+            # g_local = self.dequantize(g_local)
             g_locals.append(g_local)
-            # print(g_local)
             l_locals.append(msg['l_local'])
         g_locals = torch.stack([g_locals[i] for i in range(len(g_locals))])
         l_locals = torch.stack(l_locals)

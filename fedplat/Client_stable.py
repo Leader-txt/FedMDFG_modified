@@ -4,6 +4,8 @@ import copy
 from torch.autograd import Variable
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 import numpy as np
+from .PersonalizedModel import PersonalizedModel
+from torch.nn.parallel import DataParallel  
 
 class Client:
     def __init__(self,
@@ -18,10 +20,13 @@ class Client:
         self.id = id
         if model is not None:
             model = model
+        # model = PersonalizedModel(model,96)
         self.model = model
         if device is None:
             device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.device = device
+        device_ids = [0,1,2,3,4,5,6,7]
+        self.model = DataParallel(model, device_ids=device_ids).to(device_ids[0])  
         self.model.to(self.device)
         self.train_setting = train_setting
         self.metric_list = metric_list
@@ -117,7 +122,7 @@ class Client:
         return_msg = {}
         if msg['command'] == 'sync':
             self.model_weights = msg['w_global']
-            self.model.load_state_dict(self.model_weights)
+            self.model.module.load_state_dict(self.model_weights)
             if self.dishonest is not None:
                 if self.dishonest['grad norm'] is not None or self.dishonest['inverse grad'] is not None or self.dishonest['random grad'] is not None or self.dishonest['random grad 10'] is not None or self.dishonest['gaussian'] is not None:
                     self.old_model.load_state_dict(copy.deepcopy(self.model_weights))
@@ -169,18 +174,8 @@ class Client:
                     old_model_params_span = self.old_model.span_model_params_to_vec()
                     grad = old_model_params_span - weights
                     return_grad = grad / torch.norm(grad) * torch.norm(return_grad)
-            # compressed_g_locals = []
-            # masks = []
-            # for g in return_grad:
-            #     compressed_g, mask = self.compress_gradients(g)
-            #     compressed_g_locals.append(compressed_g)
-            #     masks.append(mask)
-            # print(return_grad)
-
-            # compressed_g_locals,masks = self.batch_compress(return_grad)
-            # return_msg['g_local'] = [compressed_g_locals,masks]
-            compressed_gradients = self.simulate_compression(return_grad)
-            return_msg['g_local'] = compressed_gradients
+            # compressed_gradients = self.simulate_compression(return_grad)
+            return_msg['g_local'] = return_grad#compressed_gradients
             return_msg['l_local'] = return_loss
         if msg['command'] == 'require_evaluate_result':
             return_grad = self.model.span_model_grad_to_vec()
@@ -394,7 +389,7 @@ class Client:
             self.model.zero_grad()
             loss.backward()
             self.clip_gradients()
-            grad_vec = self.model.span_model_grad_to_vec()
+            grad_vec = self.model.module.span_model_grad_to_vec()
             grad_mat.append(grad_vec)
         
         if len(grad_mat) == 0:

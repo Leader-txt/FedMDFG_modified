@@ -20,6 +20,7 @@ def outFunc(alg):
     stream_log += 'Global Test loss: ' + format(alg.comm_log['global_test_loss'][-1], '.6f') + ' Global Test Accuracy: ' + format(alg.comm_log['global_test_accuracy'][-1], '.6f') + '\n'
     stream_log += f'Training loss: ave: {format(np.mean(loss_list), ".6f")}, std: {format(np.std(loss_list), ".6f")}, min: {format(np.min(loss_list), ".6f")}, max: {format(np.max(loss_list), ".6f")}' + '\n'
     stream_log += f'Test Acc: ave: {format(np.mean(value_list), ".6f")}, std: {format(np.std(value_list), ".6f")}, angle: {format(np.arccos(value_list @ p / (np.linalg.norm(value_list) * np.linalg.norm(p))), ".6f")}, min: {format(np.min(value_list), ".6f")}, max: {format(np.max(value_list), ".6f")}' + '\n'
+    stream_log += f'{value_list}'
     stream_log += '\n'
     alg.stream_log += stream_log
     print(stream_log)
@@ -28,17 +29,17 @@ def read_params():
     parser.add_argument('--seed', help='seed', type=int, default=1)
     parser.add_argument('--device', help='device: -1, 0, 1, or ...', type=int, default=0)
     parser.add_argument('--model', help='model name;', type=str, default='CNN_CIFAR10_FedAvg')
-    parser.add_argument('--algorithm', help='algorithm name;', type=str, default='FedMDFG')
+    parser.add_argument('--algorithm', help='algorithm name;', type=str, default='ImprovedFedMDFG')
     parser.add_argument('--dataloader', help='dataloader name;', type=str, default='DataLoader_cifar10')
-    parser.add_argument('--SN', help='split num', type=int, default=200)
-    parser.add_argument('--PN', help='pick num', type=int, default=2)
-    parser.add_argument('--B', help='batch size', type=int, default=50)
+    parser.add_argument('--SN', help='split num', type=int, default=10)
+    parser.add_argument('--PN', help='pick num', type=int, default=1)
+    parser.add_argument('--B', help='batch size', type=int, default=4096)
     parser.add_argument('--types', help='dataloader label types;', type=str, default='default_type')
     parser.add_argument('--N', help='client num', type=int, default=5)
     parser.add_argument('--C', help='select client proportion', type=float, default=1.0)
-    parser.add_argument('--R', help='communication round', type=int, default=10)
+    parser.add_argument('--R', help='communication round', type=int, default=30000)
     parser.add_argument('--E', help='local epochs', type=int, default=3)
-    parser.add_argument('--lr', help='learning rate', type=float, default=0.1)  
+    parser.add_argument('--lr', help='learning rate', type=float, default=0.01)  
     parser.add_argument('--decay', help='learning rate decay', type=float, default=0.999)  
     parser.add_argument('--alpha', help='alpha of FedFV', type=float, default=0.1)
     parser.add_argument('--theta', help='theta of FedMDFG', type=float, default=11.25)
