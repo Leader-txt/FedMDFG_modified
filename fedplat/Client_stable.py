@@ -25,7 +25,7 @@ class Client:
         if device is None:
             device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.device = device
-        device_ids = [0,1,2,3,4,5,6,7]
+        device_ids = [0]
         self.model = DataParallel(model, device_ids=device_ids).to(device_ids[0])  
         self.model.to(self.device)
         self.train_setting = train_setting
@@ -122,7 +122,11 @@ class Client:
         return_msg = {}
         if msg['command'] == 'sync':
             self.model_weights = msg['w_global']
-            self.model.module.load_state_dict(self.model_weights)
+            # self.model.module.load_state_dict(self.model_weights)
+            # self.model.module.load_state_dict(self.model_weights.state_dict())
+            self.model.module.encoder.load_state_dict(self.model_weights.encoder.state_dict())
+            self.model.module.decoder.load_state_dict(self.model_weights.decoder.state_dict())
+            # self.model.module.personal.load_state_dict(self.model_weights.personal.state_dict())
             if self.dishonest is not None:
                 if self.dishonest['grad norm'] is not None or self.dishonest['inverse grad'] is not None or self.dishonest['random grad'] is not None or self.dishonest['random grad 10'] is not None or self.dishonest['gaussian'] is not None:
                     self.old_model.load_state_dict(copy.deepcopy(self.model_weights))

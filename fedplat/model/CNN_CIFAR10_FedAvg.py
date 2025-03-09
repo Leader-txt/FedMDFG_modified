@@ -1,8 +1,9 @@
-
 import fedplat as fp
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.autograd import Variable
+
 class CNN_CIFAR10_FedAvg(fp.Model):
     def __init__(self, device, *args, **kwargs):
         super(CNN_CIFAR10_FedAvg, self).__init__(device)
@@ -25,11 +26,18 @@ class CNN_CIFAR10_FedAvg(fp.Model):
             nn.Linear(384, 192),
             nn.Dropout(0.5),
             nn.ReLU(),
-            nn.Linear(192, 10)
+            nn.Linear(192, 96)
+        )
+        self.personal = nn.Sequential(
+            nn.ReLU(),
+            nn.Linear(96,96),
+            nn.ReLU(),
+            nn.Linear(96,10)
         )
         self.create_Loc_reshape_list()
     def forward(self, x):
         x = self.encoder(x)
         x = x.flatten(1)
         x = self.decoder(x)
+        x = self.personal(x)
         return x

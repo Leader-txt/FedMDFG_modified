@@ -217,7 +217,7 @@ class ImprovedFedMDFG(fp.Algorithm):
         miu = torch.mean(grad_local_norm)
         g_locals = g_locals / grad_local_norm.reshape(-1, 1) * miu
         # 原算法
-        fair_guidance_vec = torch.Tensor([1.0] * len(live_idx)).to(self.device)
+        # fair_guidance_vec = torch.Tensor([1.0] * len(live_idx)).to(self.device)
         # 第一次改进
         # fair_guidance_vec = l_locals[live_idx]/torch.mean(l_locals[live_idx])
         # 第二次改进
@@ -226,7 +226,7 @@ class ImprovedFedMDFG(fp.Algorithm):
         # fair_guidance_vec = 1 + (fair_guidance_vec - 1)*100
         # for i in range(len(live_idx)):
         #     vec = l_locals
-        # fair_guidance_vec = self.calculate_fair_guidance_vec(l_locals[live_idx])
+        fair_guidance_vec = self.calculate_fair_guidance_vec(l_locals[live_idx])
         # 下面这个函数应该就是计算q的部分了，但是没有完全理解
         # calculate d
         # d, vec, p_active_flag, fair_grad = get_fedmdfg_d(g_locals, l_locals, add_grads, self.theta, fair_guidance_vec, force_active, self.device)

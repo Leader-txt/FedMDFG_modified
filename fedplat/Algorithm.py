@@ -124,7 +124,7 @@ class Algorithm:
         if client_list is None:
             client_list = self.client_list
         for idx, client in enumerate(client_list):
-            msg = {'command': 'sync', 'w_global': copy.deepcopy(model.state_dict())}
+            msg = {'command': 'sync', 'w_global': copy.deepcopy(model)}
             client.get_message(msg)
         if update_count:
             self.current_comm_round += 1  
